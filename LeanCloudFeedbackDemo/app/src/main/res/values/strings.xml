@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">LeanCloudFeedbackDemo</string>
+
+    <string name="hello_world">Hello world!</string>
+    <string name="action_settings">Settings</string>
+    <string name="add_feedback">点击进入用户反馈页面</string>
+</resources>

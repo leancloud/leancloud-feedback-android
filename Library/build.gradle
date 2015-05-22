@@ -1,5 +1,5 @@
 apply plugin: 'com.android.library'
-apply plugin: 'robolectric'
+//apply plugin: 'robolectric'
 
 buildscript {
     repositories {
@@ -41,6 +41,10 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    packagingOptions {
+        exclude 'META-INF/LICENSE.txt'
+        exclude 'META-INF/NOTICE.txt'
+    }
     lintOptions {
         abortOnError false
     }
@@ -60,37 +64,37 @@ dependencies {
     compile 'cn.leancloud.android:avoscloud-sdk:v3.2+'
 }
 
-apply plugin: 'jacoco'
+//apply plugin: 'jacoco'
+//
+//jacoco {
+//    toolVersion = "0.7.1.201405082137"
+//}
+//
+//def coverageSourceDirs = [
+//        'src/main/java'
+//]
 
-jacoco {
-    toolVersion = "0.7.1.201405082137"
-}
-
-def coverageSourceDirs = [
-        'src/main/java'
-]
-
-task jacocoTestReport(type: JacocoReport, dependsOn: "testDebug") {
-    group = "Reporting"
-
-    description = "Generate Jacoco coverage reports"
-
-    classDirectories = fileTree(
-            dir: 'build/intermediates/classes/debug',
-            excludes: ['**/R.class',
-                       '**/R$*.class',
-                       '**/*$ViewInjector*.*',
-                       '**/BuildConfig.*',
-                       '**/Manifest*.*']
-    )
-
-    additionalSourceDirs = files(coverageSourceDirs)
-    sourceDirectories = files(coverageSourceDirs)
-    executionData = files('build/jacoco/testDebug.exec')
-
-    reports {
-        xml.enabled = true
-        html.enabled = true
-    }
-
-}
+//task jacocoTestReport(type: JacocoReport, dependsOn: "testDebug") {
+//    group = "Reporting"
+//
+//    description = "Generate Jacoco coverage reports"
+//
+//    classDirectories = fileTree(
+//            dir: 'build/intermediates/classes/debug',
+//            excludes: ['**/R.class',
+//                       '**/R$*.class',
+//                       '**/*$ViewInjector*.*',
+//                       '**/BuildConfig.*',
+//                       '**/Manifest*.*']
+//    )
+//
+//    additionalSourceDirs = files(coverageSourceDirs)
+//    sourceDirectories = files(coverageSourceDirs)
+//    executionData = files('build/jacoco/testDebug.exec')
+//
+//    reports {
+//        xml.enabled = true
+//        html.enabled = true
+//    }
+//
+//}
