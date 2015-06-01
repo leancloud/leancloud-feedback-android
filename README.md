@@ -23,35 +23,20 @@ LeanCloud Feedback 模块是 [LeanCloud](https://leancloud.cn) 开源的一个�
 ```
 
 ## 核心概念
-### Comment
-Comment 代表了反馈系统中间，用户或者开发者的每一次回复。不同的类型可以通过CommentType属性来指定。Comment 内部主要记录有如下信息：
+### FeedbackReply
+FeedbackReply 代表了反馈系统中间，用户或者开发者的每一次回复。不同的类型可以通过 ReplyType 属性来指定。FeedbackReply 内部主要记录有如下信息：
 
 * content，反馈的文本内容
-* type，状态
-* commentType，类型标识，表明是用户提交的，还是开发者回复的
-* attachment，反馈对应的图片信息：
-
-构造一个 Comment 对象的示例代码如下：
-
-```java
-Comment userComment = new Comment("这是一个用户反馈");//不指定CommentType类型，即为CommentType.USER
-Comment anotherUserComment = new Comment("再来说一句",CommentType.USER);
-Comment devComment = new Comment("开发者回复",CommentType.DEV);
-```
+* replyType，类型标识，表明是用户提交的，还是开发者回复的
+* attachment，反馈对应的附件信息
 
 ### FeedbackThread
-代表了用户与开发者的整个交流过程，与用户一一对应。一个用户只有一个 FeedbackThread，FeedbackThread 内部主要记录有如下信息：
+代表了用户与开发者的整个交流过程，与用户一一对应。一个用户只有一个 FeedbackThread，一个 FeedbackThread 内含有多个 FeedbackReply。FeedbackThread 内部主要记录有如下信息：
 
 * contact，用户联系方式
-* commentList，交流的详细列表
-
-```java
-FeedbackThread thread = agent.getDefaultThread();
-thread.setContact("您的邮箱或者QQ账号");
-thread.add(newComment);
-//或者也可以使用thread.getCommentsList().add(newComment);
-thread.sync(syncCallback);
-```
+* content，用户第一次反馈的文本
+* status，当前状态：open 还是 close
+* remarks，预留字段，开发者可以用来标记的一些其他信息
 
 ## 如何编译
 ### Android Studio 编译

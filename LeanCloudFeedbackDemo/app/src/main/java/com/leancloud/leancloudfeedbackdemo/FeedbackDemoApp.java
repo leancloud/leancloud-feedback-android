@@ -13,7 +13,7 @@ public class FeedbackDemoApp extends Application {
     public void onCreate() {
         super.onCreate();
 
-        AVOSCloud.initialize(this, "3to6v0iwtuvl48ivv1wa315e317c87q2v10rdmsgk2iu1age", "vleycgu6dv8h0n6c42swp4z776xzoxwhmx8evsl19eobg7f1");
+        AVOSCloud.initialize(this, "sl9sxfb9d9x0sc5g8c5wsv00f4nvztrgo5qcx4i4sjk1myn3", "ysz2l1zttl802m3qq8lvvqnmw8tnp4wiiuwe5xtydcjxrwtg");
 
     }
 }

@@ -15,7 +15,7 @@ import com.avos.avoscloud.AVPersistenceUtils;
 import com.avos.avoscloud.AVUtils;
 import com.avos.avoscloud.GetDataCallback;
 import com.avos.avoscloud.LogUtil;
-import com.leancloud.modules.feedback.Comment.CommentType;
+import com.leancloud.modules.feedback.FeedbackReply.ReplyType;
 import com.leancloud.modules.feedback.FeedbackThread.SyncCallback;
 
 import android.content.ContentUris;
@@ -40,6 +40,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnFocusChangeListener;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -56,22 +57,23 @@ import android.os.Build;
 
 public class ThreadActivity extends Activity {
 
-  FeedbackAgent agent;
-  ListView feedbackListView;
-  Button sendButton;
-  EditText feedbackInput;
-  EditText contact;
-  FeedbackThread thread;
-  FeedbackListAdapter adapter;
-  SyncCallback syncCallback;
-  ImageView imageButton;
-  AtomicBoolean animating = new AtomicBoolean(false);
+  private FeedbackAgent agent;  // feedback agent
+  private ListView feedbackListView; // feedback replies list view
+  private Button sendButton;         // feedback send button
+  private EditText feedbackInput;
+  private EditText contact;
+  private FeedbackThread thread;       // current feedback thread
+  private FeedbackListAdapter adapter;
+  private SyncCallback syncCallback;
+  private ImageView imageButton;
+  private AtomicBoolean animating = new AtomicBoolean(false);
   private static final int IMAGE_REQUEST = 657843;
 
   public static final ImageCache cache = new ImageCache(AVOSCloud.applicationContext);
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
+    requestWindowFeature(Window.FEATURE_ACTION_BAR);
     super.onCreate(savedInstanceState);
     setContentView(Resources.layout.avoscloud_feedback_activity_conversation(this));
 
@@ -80,21 +82,23 @@ public class ThreadActivity extends Activity {
     agent = new FeedbackAgent(this);
     adapter = new FeedbackListAdapter(this);
     thread = agent.getDefaultThread();
+
     feedbackListView = (ListView) findViewById(Resources.id.avoscloud_feedback_thread_list(this));
     feedbackListView.setAdapter(adapter);
+
     sendButton = (Button) findViewById(Resources.id.avoscloud_feedback_send(this));
     imageButton = (ImageView) findViewById(Resources.id.avoscloud_feedback_add_image(this));
     feedbackInput = (EditText) findViewById(Resources.id.avoscloud_feedback_input(this));
     syncCallback = new SyncCallback() {
 
       @Override
-      public void onCommentsSend(List<Comment> comments, AVException e) {
+      public void onRepliesSend(List<FeedbackReply> feedbackReplies, AVException e) {
         LogUtil.avlog.d("send new comments");
         adapter.notifyDataSetChanged();
       }
 
       @Override
-      public void onCommentsFetch(List<Comment> comments, AVException e) {
+      public void onRepliesFetch(List<FeedbackReply> feedbackReplies, AVException e) {
         LogUtil.avlog.d("fetch new comments");
         adapter.notifyDataSetChanged();
       }
@@ -108,12 +112,13 @@ public class ThreadActivity extends Activity {
         String feedbackText = feedbackInput.getText().toString();
         feedbackInput.setText("");
         if (!AVUtils.isBlankString(feedbackText)) {
-          thread.add(new Comment(feedbackText));
+          thread.addReply(new FeedbackReply(feedbackText));
           adapter.notifyDataSetChanged();
           feedbackListView.setSelection(feedbackListView.getAdapter().getCount());
           smoothScrollToBottom();
           thread.sync(syncCallback);
         }
+        // TODO: fixed me for duplicated reply, if multiple-clicks happen.
         sendButton.setOnClickListener(this);
       }
     });
@@ -199,13 +204,10 @@ public class ThreadActivity extends Activity {
 
             @Override
             public void onAnimationStart(Animation animation) {
-
             }
 
             @Override
             public void onAnimationRepeat(Animation animation) {
-              // TODO Auto-generated method stub
-
             }
 
             @Override
@@ -229,14 +231,11 @@ public class ThreadActivity extends Activity {
 
             @Override
             public void onAnimationStart(Animation animation) {
-              // TODO Auto-generated method stub
               animating.set(true);
             }
 
             @Override
             public void onAnimationRepeat(Animation animation) {
-              // TODO Auto-generated method stub
-
             }
 
             @Override
@@ -448,9 +447,8 @@ public class ThreadActivity extends Activity {
       String filePath = ThreadActivity.getPath(this, uri);
 
       try {
-        LogUtil.avlog.d("img picked:" + filePath);
         File attachmentFile = new File(filePath);
-        thread.add(new Comment(attachmentFile));
+        thread.addReply(new FeedbackReply(attachmentFile));
         adapter.notifyDataSetChanged();
         feedbackListView.setSelection(feedbackListView.getAdapter().getCount());
         smoothScrollToBottom();
@@ -504,12 +502,12 @@ public class ThreadActivity extends Activity {
 
     @Override
     public int getCount() {
-      return thread.getCommentsList().size();
+      return thread.getFeedbackReplyList().size();
     }
 
     @Override
     public Object getItem(int position) {
-      return thread.getCommentsList().get(position);
+      return thread.getFeedbackReplyList().get(position);
     }
 
     @Override
@@ -544,8 +542,8 @@ public class ThreadActivity extends Activity {
       } else {
         holder = (ViewHolder) convertView.getTag();
       }
-      final Comment comment = (Comment) getItem(position);
-      if (comment.getAttachment() != null && comment.getAttachment().getUrl() != null) {
+      final FeedbackReply feedbackReply = (FeedbackReply) getItem(position);
+      if (feedbackReply.getAttachment() != null && feedbackReply.getAttachment().getUrl() != null) {
         holder.content.setVisibility(View.GONE);
         holder.image.setVisibility(View.VISIBLE);
         final OnClickListener imageOnClickListener = new OnClickListener() {
@@ -555,22 +553,22 @@ public class ThreadActivity extends Activity {
             Intent intent = new Intent();
             intent.setAction(Intent.ACTION_VIEW);
             intent.setDataAndType(
-                Uri.fromFile(ImageCache.getCacheFile(comment.getAttachment().getUrl())), "image/*");
+                Uri.fromFile(ImageCache.getCacheFile(feedbackReply.getAttachment().getUrl())), "image/*");
             startActivity(intent);
           }
         };
-        Bitmap attachmentCache = cache.getImage(comment.getAttachment().getUrl());
+        Bitmap attachmentCache = cache.getImage(feedbackReply.getAttachment().getUrl());
         if (attachmentCache != null) {
           holder.image.setImageBitmap(attachmentCache);
           holder.image.setOnClickListener(imageOnClickListener);
         } else {
           holder.image.setOnClickListener(null);
-          comment.getAttachment().getDataInBackground(new GetDataCallback() {
+          feedbackReply.getAttachment().getDataInBackground(new GetDataCallback() {
 
             @Override
             public void done(byte[] data, AVException e) {
               if (e == null) {
-                Bitmap attachmentCache = cache.setImage(comment.getAttachment().getUrl(), data);
+                Bitmap attachmentCache = cache.setImage(feedbackReply.getAttachment().getUrl(), data);
                 holder.image.setImageBitmap(attachmentCache);
                 holder.image.setOnClickListener(imageOnClickListener);
               }
@@ -579,14 +577,14 @@ public class ThreadActivity extends Activity {
         }
       } else {
         holder.content.setVisibility(View.VISIBLE);
-        holder.content.setText(comment.getContent());
+        holder.content.setText(feedbackReply.getContent());
         holder.image.setVisibility(View.GONE);
       }
-      if (Math.abs(comment.getCreatedAt().getTime() - System.currentTimeMillis()) < 10000) {
+      if (Math.abs(feedbackReply.getCreatedAt().getTime() - System.currentTimeMillis()) < 10000) {
         holder.timestamp.setText(getResources().getString(
             Resources.string.avoscloud_feedback_just_now(ThreadActivity.this)));
       } else {
-        holder.timestamp.setText(DateUtils.getRelativeTimeSpanString(comment.getCreatedAt()
+        holder.timestamp.setText(DateUtils.getRelativeTimeSpanString(feedbackReply.getCreatedAt()
             .getTime(), System.currentTimeMillis() - 1, 0l, DateUtils.FORMAT_ABBREV_ALL));
       }
       return convertView;
@@ -599,8 +597,8 @@ public class ThreadActivity extends Activity {
 
     @Override
     public int getItemViewType(int position) {
-      Comment comment = (Comment) this.getItem(position);
-      if (comment.getCommentType().equals(CommentType.USER)) {
+      FeedbackReply feedbackReply = (FeedbackReply) this.getItem(position);
+      if (feedbackReply.getReplyType().equals(ReplyType.USER)) {
         return 0;
       } else {
         return 1;

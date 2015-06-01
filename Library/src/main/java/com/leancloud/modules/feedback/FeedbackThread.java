@@ -1,13 +1,11 @@
 package com.leancloud.modules.feedback;
 
-import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.io.File;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -19,33 +17,36 @@ import com.alibaba.fastjson.JSON;
 import com.avos.avoscloud.AVException;
 import com.avos.avoscloud.AVFile;
 import com.avos.avoscloud.AVObject;
-import com.avos.avoscloud.AVPersistenceUtils;
 import com.avos.avoscloud.AVUtils;
 import com.avos.avoscloud.GenericObjectCallback;
 import com.avos.avoscloud.LogUtil;
 import com.avos.avoscloud.PaasClient;
+import com.avos.avoscloud.AVPersistenceUtils;
 
 public class FeedbackThread {
-  static Method currentInstallationMethod;
-  List<Comment> commentList;
-  String contact;
-
   private static final String FEEDBACK_PATH = "feedback";
   private static final String FEEDBACK_PUT_PATH = "feedback/%s";
-  private static final String FEEDBACK_THREAD_PATH = "feedback/%s/threads";
+  private static final String FEEDBACK_REPLY_PATH = "feedback/%s/threads";
   private static FeedbackThread thread;
+  private static Method currentInstallationMethod;
+
+  private List<FeedbackReply> feedbackReplyList = new LinkedList<FeedbackReply>();
+  private String contact = "";
+  private String status = "";
+  private String remarks = "";
+  private AVFile attachment = null;
+  private String content = "";
+  private String installationId = "";
 
   private FeedbackThread() {
     String content = AVPersistenceUtils.readContentFromFile(getFeedbackCacheFile());
-    contact = AVPersistenceUtils.readContentFromFile(getContactCacheFile());
+    this.contact = AVPersistenceUtils.readContentFromFile(getContactCacheFile());
     if (!AVUtils.isBlankString(content)) {
       try {
-        commentList = JSON.parseArray(content, Comment.class);
-      } catch (Exception e) {
-        commentList = new LinkedList<Comment>();
+        this.feedbackReplyList = JSON.parseArray(content, FeedbackReply.class);
+      } catch (Exception ex) {
+        ex.printStackTrace();
       }
-    } else {
-      commentList = new LinkedList<Comment>();
     }
   }
 
@@ -56,12 +57,12 @@ public class FeedbackThread {
     return thread;
   }
 
-  public void add(Comment comment) {
-    commentList.add(comment);
+  public void addReply(FeedbackReply feedbackReply) {
+    feedbackReplyList.add(feedbackReply);
   }
 
-  public List<Comment> getCommentsList() {
-    return commentList;
+  public List<FeedbackReply> getFeedbackReplyList() {
+    return feedbackReplyList;
   }
 
   public String getContact() {
@@ -71,15 +72,21 @@ public class FeedbackThread {
   public void setContact(String contact) {
     if (!AVUtils.isBlankString(contact) && !contact.equals(this.contact)) {
       this.contact = contact;
-      if (commentList.size() > 0) {
-        commentList.get(0).setSynced(false);
+      if (feedbackReplyList.size() > 0) {
+        feedbackReplyList.clear();
         saveContact();
       }
     }
   }
 
+  public void setRemarks(String remarks) {
+    if (!AVUtils.isBlankString(remarks)) {
+      this.remarks = remarks;
+    }
+  }
+
   public synchronized void sync(final SyncCallback callback) {
-    if (commentList.size() > 0) {
+    if (feedbackReplyList.size() > 0) {
       // 先保存后取
       new AsyncTask<Void, Integer, Exception>() {
         boolean flag = true;
@@ -87,20 +94,20 @@ public class FeedbackThread {
 
         @Override
         protected Exception doInBackground(Void... params) {
-          for (int i = 0; i < commentList.size() && flag; i++) {
-            if (!commentList.get(i).synced) {
-              final Comment currentComment = commentList.get(i);
-              if (currentComment.getAttachment() != null) {
+          for (int i = 0; i < feedbackReplyList.size() && flag; i++) {
+            if (!feedbackReplyList.get(i).isSynced()) {
+              final FeedbackReply currentFeedbackReply = feedbackReplyList.get(i);
+              if (currentFeedbackReply.getAttachment() != null) {
                 try {
-                  currentComment.getAttachment().save();
+                  currentFeedbackReply.getAttachment().save();
                 } catch (AVException e) {
                   return e;
                 }
               }
-              if (i == 0 && !AVUtils.isBlankString(currentComment.getObjectId())) {
+              if (i == 0 && !AVUtils.isBlankString(currentFeedbackReply.getObjectId())) {
                 PaasClient.storageInstance().putObject(
-                    String.format(FEEDBACK_PUT_PATH, currentComment.getObjectId()),
-                    mapFromObject(currentComment, false), true, null, new GenericObjectCallback() {
+                    String.format(FEEDBACK_PUT_PATH, currentFeedbackReply.getObjectId()),
+                    generateRestParameters(currentFeedbackReply), true, null, new GenericObjectCallback() {
                       @Override
                       public void onSuccess(String content, AVException e) {
                         if (e != null) {
@@ -111,8 +118,8 @@ public class FeedbackThread {
                           JSONObject resp;
                           try {
                             resp = new JSONObject(content);
-                            if (currentComment.getObjectId().equals(resp.getString("objectId"))) {
-                              currentComment.setSynced(true);
+                            if (currentFeedbackReply.getObjectId().equals(resp.getString("objectId"))) {
+                              currentFeedbackReply.setSynced(true);
                             }
                           } catch (JSONException e1) {
                             sendException = e;
@@ -126,11 +133,11 @@ public class FeedbackThread {
                         sendException = new Exception(error);
                         flag = false;
                       }
-                    }, currentComment.getObjectId(), null);
+                    }, currentFeedbackReply.getObjectId(), null);
               } else {
                 PaasClient.storageInstance().postObject(
-                    i == 0 ? FEEDBACK_PATH : String.format(FEEDBACK_THREAD_PATH, commentList.get(0)
-                        .getObjectId()), mapFromObject(currentComment, i != 0), true,
+                    i == 0 ? FEEDBACK_PATH : String.format(FEEDBACK_REPLY_PATH, feedbackReplyList.get(0)
+                        .getObjectId()), i == 0? generateRestParameters(currentFeedbackReply):currentFeedbackReply.getRestParameters(), true,
                     new GenericObjectCallback() {
                       @Override
                       public void onSuccess(String content, AVException e) {
@@ -142,9 +149,9 @@ public class FeedbackThread {
                           JSONObject resp;
                           try {
                             resp = new JSONObject(content);
-                            currentComment.setObjectId(resp.getString("objectId"));
-                            currentComment.setSynced(true);
-                            currentComment.setCreatedAt(AVUtils.dateFromString(resp
+                            currentFeedbackReply.setObjectId(resp.getString("objectId"));
+                            currentFeedbackReply.setSynced(true);
+                            currentFeedbackReply.setCreatedAt(AVUtils.dateFromString(resp
                                 .getString("createdAt")));
                           } catch (JSONException e1) {
                             sendException = e;
@@ -160,8 +167,8 @@ public class FeedbackThread {
                       }
                     });
               }
-            }
-          }
+            } // end if (!feedbackReplyList.get(i).isSynced())
+          } // end for
           return sendException;
         }
 
@@ -169,46 +176,44 @@ public class FeedbackThread {
         public void onPostExecute(Exception ex) {
           saveLocal();
           if (callback != null) {
-            callback.onCommentsSend(commentList, ex == null ? null : new AVException(ex));
+            callback.onRepliesSend(feedbackReplyList, ex == null ? null : new AVException(ex));
           }
-          if (!AVUtils.isBlankString(commentList.get(0).getObjectId())) {
+          if (!AVUtils.isBlankString(feedbackReplyList.get(0).getObjectId())) {
             PaasClient.storageInstance().getObject(
-                String.format(FEEDBACK_THREAD_PATH, commentList.get(0).getObjectId()), null, false,
+                String.format(FEEDBACK_REPLY_PATH, feedbackReplyList.get(0).getObjectId()), null, false,
                 null, new GenericObjectCallback() {
                   @Override
                   public void onSuccess(String content, AVException e) {
                     if (e != null) {
                       if (callback != null) {
-                        callback.onCommentsFetch(commentList, e);
+                        callback.onRepliesFetch(feedbackReplyList, e);
                       }
                       return;
                     } else {
                       try {
                         JSONObject resp = new JSONObject(content);
                         String results = resp.getString("results");
-                        JSONArray commentJsonArray = new JSONArray(results);
-                        List<Comment> thread = new LinkedList<Comment>();
-                        for (int i = 0; i < commentJsonArray.length(); i++) {
-                          JSONObject o = commentJsonArray.getJSONObject(i);
-                          Comment c = getComentFromJSONObject(o);
+                        JSONArray replyJsonArray = new JSONArray(results);
+                        List<FeedbackReply> replies = new LinkedList<FeedbackReply>();
+                        for (int i = 0; i < replyJsonArray.length(); i++) {
+                          JSONObject o = replyJsonArray.getJSONObject(i);
+                          FeedbackReply c = FeedbackReply.getInstanceFromJSONObject(o);
                           if (c != null && !AVUtils.isBlankString(c.getObjectId())) {
-                            thread.add(c);
+                            c.setSynced(true);
+                            replies.add(c);
                           }
                         }
-                        Comment first = commentList.get(0);
-                        commentList.clear();
-                        commentList.add(first);
-                        for (Comment c : thread) {
-                          c.synced = true;
-                          commentList.add(c);
-                        }
+                        FeedbackReply first = feedbackReplyList.get(0);
+                        feedbackReplyList.clear();
+                        feedbackReplyList.add(first);
+                        feedbackReplyList.addAll(replies);
                         if (callback != null) {
-                          callback.onCommentsFetch(commentList, e);
+                          callback.onRepliesFetch(feedbackReplyList, e);
                         }
                         saveLocal();
                       } catch (Exception ex) {
                         if (callback != null) {
-                          callback.onCommentsFetch(commentList, new AVException(ex));
+                          callback.onRepliesFetch(feedbackReplyList, new AVException(ex));
                         }
                       }
                     }
@@ -217,7 +222,7 @@ public class FeedbackThread {
                   @Override
                   public void onFailure(Throwable error, String content) {
                     if (callback != null) {
-                      callback.onCommentsFetch(commentList, new AVException(content, error));
+                      callback.onRepliesFetch(feedbackReplyList, new AVException(content, error));
                     }
                   }
                 });
@@ -228,13 +233,13 @@ public class FeedbackThread {
   }
 
   public interface SyncCallback {
-    public void onCommentsSend(List<Comment> comments, AVException e);
+    public void onRepliesSend(List<FeedbackReply> feedbackReplies, AVException e);
 
-    public void onCommentsFetch(List<Comment> comments, AVException e);
+    public void onRepliesFetch(List<FeedbackReply> feedbackReplies, AVException e);
   }
 
   protected void saveLocal() {
-    String content = JSON.toJSONString(commentList);
+    String content = JSON.toJSONString(this.feedbackReplyList);
     AVPersistenceUtils.saveContentToFile(content, getFeedbackCacheFile());
     saveContact();
   }
@@ -259,44 +264,18 @@ public class FeedbackThread {
     return dir;
   }
 
-  protected Comment getComentFromJSONObject(JSONObject o) {
-    Comment c = new Comment();
-    try {
-      c.setObjectId(o.getString("objectId"));
-      if (o.has("content")) {
-        String content = o.getString("content");
-        if (!"null".equalsIgnoreCase(content)) {
-          c.setContent(content);
-        }
-      }
-      c.setCreatedAt(AVUtils.dateFromString(o.getString("createdAt")));
-      if (AVUtils.isBlankString(o.getString("type"))) {
-        c.setType("user");
-      } else {
-        c.setType(o.getString("type"));
-      }
-      if (o.has("attachment") && !AVUtils.isBlankString(o.getString("attachment"))) {
-        c.setAttachment(new AVFile(AVUtils.md5(o.getString("attachment")), o
-            .getString("attachment"), null));
-      }
-      c.setSynced(true);
-    } catch (Exception e) {
-      return null;
-    }
-    return c;
-  }
-
-  protected String mapFromObject(Comment comment, boolean threadFlag) {
+  protected String generateRestParameters(FeedbackReply feedbackReply) {
 
     HashMap<String, Object> parameters = new HashMap<String, Object>();
-    parameters.put("content", comment.getContent());
-    if (threadFlag) {
-      parameters.put("type", comment.getCommentType().toString());
-    } else if (!AVUtils.isBlankContent(contact)) {
-      parameters.put("contact", contact);
+    parameters.put("content", feedbackReply.getContent());
+    if (!AVUtils.isBlankContent(this.contact)) {
+      parameters.put("contact", this.contact);
     }
-    if (comment.getAttachment() != null) {
-      parameters.put("attachment", comment.getAttachment().getUrl());
+    if (!AVUtils.isBlankString(this.remarks)) {
+      parameters.put("remarks", this.remarks);
+    }
+    if (feedbackReply.getAttachment() != null) {
+      parameters.put("attachment", feedbackReply.getAttachment().getUrl());
     }
     try {
       if (currentInstallationMethod == null) {
@@ -304,11 +283,19 @@ public class FeedbackThread {
         currentInstallationMethod = installationClass.getMethod("getCurrentInstallation");
       }
       AVObject o = (AVObject) currentInstallationMethod.invoke(null);
-      if (!threadFlag && !AVUtils.isBlankString(o.getObjectId())) {
+      if (!AVUtils.isBlankString(o.getObjectId())) {
         parameters.put("iid", o.getObjectId());
       }
       // ignore all exceptions
-    } catch (IllegalAccessException e) {} catch (InvocationTargetException e) {} catch (ClassNotFoundException e) {} catch (NoSuchMethodException e) {}
+    } catch (IllegalAccessException e) {
+
+    } catch (InvocationTargetException e) {
+
+    } catch (ClassNotFoundException e) {
+
+    } catch (NoSuchMethodException e) {
+
+    }
 
     return AVUtils.restfulServerData(parameters);
   }
