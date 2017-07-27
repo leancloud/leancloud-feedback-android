@@ -8,19 +8,11 @@ LeanCloud Feedback 模块是 [LeanCloud](https://leancloud.cn) 开源的一个�
 ![image](images/Screen.png)
 
 
+## 代码地址
+现在我们已经将所有的 SDK 代码开源了，为了便于管理和维护，用户反馈的最新代码被转移到了 [repository: Android-SDK-All](https://github.com/leancloud/android-sdk-all)
 
 ## 如何贡献
 你可以通过提 issue 或者发 pull request 的方式，来贡献代码。开源世界因你我参与而更加美好。
-
-## 项目结构
-为了便于测试，我们将 feedback 模块的代码和 demo 都放在了一起，整个 repo 结构如下：
-
-```
-.
-├── Library  <---- 这是 feedback library 代码
-├── LeanCloudFeedbackDemo    <---- feedback demo 主要代码
-└── README.md
-```
 
 ## 核心概念
 ### FeedbackReply
@@ -37,23 +29,6 @@ FeedbackReply 代表了反馈系统中间，用户或者开发者的每一次回
 * content，用户第一次反馈的文本
 * status，当前状态：open 还是 close
 * remarks，预留字段，开发者可以用来标记的一些其他信息
-
-## 如何编译
-### Android Studio 编译
-在 Android Studio 中，选择「Open an existing Android Studio project」，打开 Library 目录，即可开始编译。
-
-### 命令行编译
-在 Library 目录下执行如下语句，即可开始编译
-
-```
-./gradlew build
-```
-
-编译之后在 Library/build/outputs 目录下即有 aar package 文件， Library/build/libs 目录下即有 jar 文件。
-
-
-## 如何运行 demo
-在 Android Studio 中，选择「Open an existing Android Studio project」，打开 LeanCloudFeedbackDemo 目录，即可。
 
 
 ## 在我的项目中如何使用这一组件
